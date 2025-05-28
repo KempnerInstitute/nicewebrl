@@ -1,7 +1,6 @@
-# NiceWebRL
+# NiceWebRL: a Python library for human subject experiments with reinforcement learning environments
 
 
-This is the official repository of [NiceWebRL: a meta-environment for developing Human-like, Human-compatible, and Human-assistive AI](placeholder).
 
 **Table of Contents**
 
