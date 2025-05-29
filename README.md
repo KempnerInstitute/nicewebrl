@@ -11,9 +11,6 @@
 * [Other Jax environments compatible with NiceWebRL](#other-jax-environments-compatible-with-nicewebrl)
 
 
-NiceWebRL is a Python library for quickly making human subject experiments that leverage machine reinforcement learning environments.
-
-
 <img src="assets/human-ai-comparisons.png" alt="Comparison Image" style="width: 100%; max-width: 800px;">
 
 NiceWebRL enables researchers to use the same environments both to train and evaluate virtual agents, and to train and evaluate humans.
