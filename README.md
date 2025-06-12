@@ -1,7 +1,6 @@
-# NiceWebRL
+# NiceWebRL: a Python library for human subject experiments with reinforcement learning environments
 
 
-This is the official repository of [NiceWebRL: a meta-environment for developing Human-like, Human-compatible, and Human-assistive AI](placeholder).
 
 **Table of Contents**
 
@@ -10,9 +9,6 @@ This is the official repository of [NiceWebRL: a meta-environment for developing
   * [Paper case studies](#paper-case-studies)
   * [More examples](#more-examples)
 * [Other Jax environments compatible with NiceWebRL](#other-jax-environments-compatible-with-nicewebrl)
-
-
-NiceWebRL is a Python library for quickly making human subject experiments that leverage machine reinforcement learning environments.
 
 
 <img src="assets/human-ai-comparisons.png" alt="Comparison Image" style="width: 100%; max-width: 800px;">
@@ -275,5 +271,8 @@ When targetting normative solutions, one may want to study algorithms asymptotic
     </tr>
   </tbody>
 </table>
+<<<<<<< HEAD
 
 [![Star History Chart](https://api.star-history.com/svg?repos=KempnerInstitute/nicewebrl&type=Date)](https://star-history.com/#KempnerInstitute/nicewebrl&Date)
+=======
+>>>>>>> d80fadbd477e9430d1d6083a069a6fef0a4d905a
