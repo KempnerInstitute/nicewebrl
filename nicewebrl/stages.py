@@ -27,8 +27,8 @@ from nicewebrl import user_data_file
 
 
 try:
-  import jax.tree.map as jax_tree_map
-except ImportError:
+  jax_tree_map = jax.tree.map
+except AttributeError:
   import jax
   jax_tree_map = jax.tree_map
 except:
