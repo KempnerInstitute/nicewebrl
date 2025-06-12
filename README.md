@@ -271,8 +271,5 @@ When targetting normative solutions, one may want to study algorithms asymptotic
     </tr>
   </tbody>
 </table>
-<<<<<<< HEAD
 
 [![Star History Chart](https://api.star-history.com/svg?repos=KempnerInstitute/nicewebrl&type=Date)](https://star-history.com/#KempnerInstitute/nicewebrl&Date)
-=======
->>>>>>> d80fadbd477e9430d1d6083a069a6fef0a4d905a
