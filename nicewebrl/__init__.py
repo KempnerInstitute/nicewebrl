@@ -59,3 +59,5 @@ from nicewebrl.logging import setup_logging
 
 from nicewebrl.data_analysis import compute_reaction_time
 from nicewebrl.data_analysis import time_diff
+
+from nicewebrl.run_experiment import run

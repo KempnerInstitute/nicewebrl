@@ -68,7 +68,7 @@ class SimpleExperiment(Container):
     return stage_order
 
   def get_experiment_stage_idx(self):
-    stage_idx = app.storage.user["stage_idx"]
+    stage_idx = app.storage.user.get("stage_idx", None)
     if stage_idx is None:
       stage_idx = 0
       app.storage.user["stage_idx"] = stage_idx
