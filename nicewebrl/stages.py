@@ -30,8 +30,14 @@ from nicewebrl.nicejax import (
 )
 from nicewebrl.utils import retry_with_exponential_backoff, write_msgpack_record
 
-
-from jax.tree_util import tree_map as jax_tree_map
+try:
+    from jax.tree_util import tree_map as jax_tree_map
+except ImportError:
+    try:
+        import jax
+        jax_tree_map = jax.tree.map
+    except AttributeError:
+        raise ImportError("Failed to import jax.tree.map or jax.tree_map")
 
 # Type definitions
 FEEDBACK_FN = Callable[[struct.PyTreeNode], Dict]
@@ -40,6 +46,7 @@ PARAMS = struct.PyTreeNode
 TIMESTEP_CALL_FN = Callable[[TimeStep], None]
 RENDER_FN = Callable[[TimeStep], IMAGE]
 DISPLAY_FN = Callable[["Stage", ui.element, TimeStep], None]
+
 
 logger = get_logger(__name__)
 
