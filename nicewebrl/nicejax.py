@@ -1,28 +1,28 @@
-import time
-import typing
-from datetime import datetime
-from typing import Optional
-from typing import Union, Any, Callable, Tuple
-from typing import get_type_hints
-from base64 import b64encode
-from flax import struct
-from flax import serialization
-from flax.core import FrozenDict
 import io
 import inspect
+import random
+import sys
+import time
+from base64 import b64encode
+from datetime import datetime
+from typing import Any, Callable, Optional, Tuple, Union, get_type_hints
+
+import jax
 import jax.numpy as jnp
 import jax.random
 import numpy as np
-import random
-import sys
+from flax import serialization, struct
+from flax.core import FrozenDict
 from nicegui import app, ui
 from PIL import Image
 
 from nicewebrl.logging import get_logger
 
-Timestep = Any
-RenderFn = Callable[[Timestep], jax.Array]
+# Type definitions
+TIMESTEP = Any
+RENDER_FN = Callable[[TIMESTEP], jax.Array]
 
+# Module-level variables
 logger = get_logger(__name__)
 
 
@@ -109,7 +109,7 @@ class StepType(jnp.uint8):
   MID: jax.Array = jnp.asarray(1, dtype=jnp.uint8)
   LAST: jax.Array = jnp.asarray(2, dtype=jnp.uint8)
 
-EnvParams = struct.PyTreeNode
+ENV_PARAMS = struct.PyTreeNode
 
 class TimeStep(struct.PyTreeNode):
   state: struct.PyTreeNode
@@ -267,8 +267,8 @@ class JaxWebEnv:
     print(f"\tstep time: {time.time() - start}")
 
   def precompile_vmap_render_fn(
-    self, render_fn: RenderFn, dummy_env_params: struct.PyTreeNode
-  ) -> RenderFn:
+    self, render_fn: RENDER_FN, dummy_env_params: struct.PyTreeNode
+  ) -> RENDER_FN:
     """Call this function to pre-compile a multi-render function before experiment starts."""
     print("Compiling multi-render function.")
     start = time.time()
@@ -324,8 +324,8 @@ class MultiAgentJaxWebEnv:
 
     def precompile_vmap_render_fn(
             self,
-            render_fn: RenderFn,
-            dummy_env_params: struct.PyTreeNode={'random_reset_fn': 'reset_all'}) -> RenderFn:
+            render_fn: RENDER_FN,
+            dummy_env_params: struct.PyTreeNode={'random_reset_fn': 'reset_all'}) -> RENDER_FN:
         """Call this function to pre-compile a multi-render function before experiment starts."""
         logger.info("Compiling multi-render function.")
         start = time.time()

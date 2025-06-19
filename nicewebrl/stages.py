@@ -1,51 +1,54 @@
-from typing import List, Any, Callable, Dict, Optional, Union
-from functools import partial
-import uuid
 import asyncio
-from asyncio import Lock
-import aiofiles
 import copy
 import dataclasses
+import random
+import uuid
+from asyncio import Lock
 from datetime import datetime
+from functools import partial
+from typing import Any, Callable, Dict, List, Optional, Union
 
-from flax import struct
-from flax import serialization
+import aiofiles
 import jax
 import jax.numpy as jnp
-import random
+import numpy as np
+from flax import serialization, struct
+from nicegui import app, ui
 from tortoise import fields, models
 
-from nicegui import app, ui
-from nicewebrl.nicejax import new_rng, base64_npimage, make_serializable, TimeStep
-from nicewebrl.logging import get_logger
-from nicewebrl.utils import retry_with_exponential_backoff
-from nicewebrl.utils import write_msgpack_record
-from nicewebrl.nicejax import JaxWebEnv, MultiAgentJaxWebEnv
-import numpy as np
-from nicewebrl.container import Container
+# Local application imports
 from nicewebrl import user_data_file
-
+from nicewebrl.container import Container
+from nicewebrl.logging import get_logger
+from nicewebrl.nicejax import (
+    JaxWebEnv,
+    MultiAgentJaxWebEnv,
+    TimeStep,
+    base64_npimage,
+    make_serializable,
+    new_rng,
+)
+from nicewebrl.utils import retry_with_exponential_backoff, write_msgpack_record
 
 try:
-  jax_tree_map = jax.tree.map
-except AttributeError:
-  import jax
-  jax_tree_map = jax.tree_map
-except:
-  raise ImportError("Failed to import jax.tree.map or jax.tree_map")
+    from jax.tree_util import tree_map as jax_tree_map
+except ImportError:
+    try:
+        import jax
+        jax_tree_map = jax.tree.map
+    except AttributeError:
+        raise ImportError("Failed to import jax.tree.map or jax.tree_map")
 
-FeedbackFn = Callable[[struct.PyTreeNode], Dict]
+# Type definitions
+FEEDBACK_FN = Callable[[struct.PyTreeNode], Dict]
+IMAGE = jnp.ndarray
+PARAMS = struct.PyTreeNode
+TIMESTEP_CALL_FN = Callable[[TimeStep], None]
+RENDER_FN = Callable[[TimeStep], IMAGE]
+DISPLAY_FN = Callable[["Stage", ui.element, TimeStep], None]
 
 
 logger = get_logger(__name__)
-
-Image = jnp.ndarray
-Params = struct.PyTreeNode
-
-TimestepCallFn = Callable[[TimeStep], None]
-RenderFn = Callable[[TimeStep], Image]
-
-DisplayFn = Callable[["Stage", ui.element, TimeStep], None]
 
 
 def time_diff(t1, t2) -> float:
@@ -171,7 +174,7 @@ class Stage:
   title: str = "stage"
   body: str = "text"
   metadata: Dict[str, Any] = dataclasses.field(default_factory=dict)
-  display_fn: DisplayFn = None
+  display_fn: DISPLAY_FN = None
   custom_key_press_fn: Callable = None
   finished: bool = False
   next_button: bool = True
@@ -232,7 +235,8 @@ class Stage:
 class FeedbackStage(Stage):
   """A simple feedback stage to collect data from a participant.
 
-  I assume that the display_fn will return once user data is collected and the stage is over. The display_fn should return a dictionary collected data. This is added to the data field of the ExperimentData object.
+  I assume that the display_fn will return once user data is collected and the stage is over. 
+  The display_fn should return a dictionary collected data. This is added to the data field of the ExperimentData object.
   """
 
   next_button: bool = False
@@ -305,11 +309,11 @@ class EnvStage(Stage):
   max_episodes: Optional[int] = 10
   web_env: JaxWebEnv = None
   env_params: struct.PyTreeNode = None
-  render_fn: RenderFn = None
-  reset_display_fn: Optional[DisplayFn] = None
+  render_fn: RENDER_FN = None
+  reset_display_fn: Optional[DISPLAY_FN] = None
   vmap_render_fn: Optional[Callable] = None
-  evaluate_success_fn: TimestepCallFn = None
-  check_finished: Optional[TimestepCallFn] = None
+  evaluate_success_fn: TIMESTEP_CALL_FN = None
+  check_finished: Optional[TIMESTEP_CALL_FN] = None
   custom_data_fn: Optional[Callable] = None
   state_cls: Optional[EnvStageState] = None
   action_keys: Optional[Dict[int, str]] = None
@@ -799,7 +803,7 @@ class MultiAgentEnvStage(EnvStage):
     init_hidden_state_fn: Any = None
     human_id: Optional[int] = None  # is agent 0 or agent 1
     using_param_stack: bool = False
-    check_finished: Optional[TimestepCallFn] = None
+    check_finished: Optional[TIMESTEP_CALL_FN] = None
 
     def __post_init__(self):
         super().__post_init__()

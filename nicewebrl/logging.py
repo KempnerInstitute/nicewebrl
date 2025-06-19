@@ -38,15 +38,15 @@ logger.warning('some warning message')
 > (2/31) 3266458590: 2024/10/26 20:24:47 - some_name - WARNING - some warning message
 """
 
-from typing import Optional, Callable
-import traceback
 import io
-
 import logging
-import sys
 import os
-from nicegui import app
+import sys
+import traceback
 from functools import lru_cache
+from typing import Callable, Optional
+
+from nicegui import app
 
 
 class UserAwareOutput(io.TextIOBase):
