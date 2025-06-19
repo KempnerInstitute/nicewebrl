@@ -1,11 +1,13 @@
-from typing import List, Callable, Optional
-import polars as pl
+from typing import Callable, List, Optional
+
 import numpy as np
+import polars as pl
 from flax import struct
 
-Remove = bool
-Episode = struct.PyTreeNode
-EpisodeFilter = Callable[[Episode], Remove]
+# Type definitions
+REMOVE = bool
+EPISODE = struct.PyTreeNode
+EPISODE_FILTER = Callable[[EPISODE], REMOVE]
 
 
 class DataFrame(object):
@@ -69,7 +71,7 @@ class DataFrame(object):
   def filter(
     self,
     *args,
-    episode_filter: Optional[EpisodeFilter] = None,
+    episode_filter: Optional[EPISODE_FILTER] = None,
     reindex: Optional[bool] = True,
     **kwargs,
   ):
@@ -98,7 +100,7 @@ class DataFrame(object):
       df = df._filter_episodes(episode_filter)
     return df
 
-  def _filter_episodes(self, episode_filter: EpisodeFilter):
+  def _filter_episodes(self, episode_filter: EPISODE_FILTER):
     """
     Filter rows and episodes based on a given filter function.
 
@@ -125,10 +127,10 @@ class DataFrame(object):
 
   def filter_by_group(
     self,
-    input_episode_filter: EpisodeFilter,
+    input_episode_filter: EPISODE_FILTER,
     input_settings: dict,
     output_settings: dict,
-    output_episode_filter: Optional[EpisodeFilter] = None,
+    output_episode_filter: Optional[EPISODE_FILTER] = None,
     group_key: str = "user_id",
   ):
     """
@@ -197,7 +199,7 @@ class DataFrame(object):
   def apply(
     self,
     fn,
-    episode_filter: Optional[EpisodeFilter] = None,
+    episode_filter: Optional[EPISODE_FILTER] = None,
     output_transform=lambda x: x,
     **kwargs,
   ):
@@ -231,10 +233,10 @@ class DataFrame(object):
   def apply_by_group(
     self,
     fn,
-    input_episode_filter: EpisodeFilter,
+    input_episode_filter: EPISODE_FILTER,
     input_settings: dict,
     output_settings: dict,
-    output_episode_filter: Optional[EpisodeFilter] = None,
+    output_episode_filter: Optional[EPISODE_FILTER] = None,
     output_transform=lambda x: x,
     splitting_key: str = "user_id",
   ):
@@ -311,4 +313,5 @@ def concat_list(*dfs: List[DataFrame]) -> DataFrame:
   return DataFrame(df=pl.concat(_dfs, how="diagonal_relaxed"), episodes=episodes)
 
 
-concat_dataframes = concat_list
+# Module-level variables
+CONCAT_DATAFRAMES = concat_list
