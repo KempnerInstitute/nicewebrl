@@ -1,16 +1,18 @@
-from nicegui import app
-from typing import List, Union
 import dataclasses
 import uuid
+from typing import List, Union
+
 import jax.numpy as jnp
 import jax.random
+from nicegui import app
 
-from nicewebrl.stages import Block, Stage
 from nicewebrl.container import Container
-from nicewebrl.nicejax import new_rng
 from nicewebrl.logging import get_logger
-from nicewebrl.utils import get_user_lock, get_progress
+from nicewebrl.nicejax import new_rng
+from nicewebrl.stages import Block, Stage
+from nicewebrl.utils import get_progress, get_user_lock
 
+# Module-level variables
 logger = get_logger(__name__)
 
 

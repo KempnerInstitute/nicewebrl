@@ -1,6 +1,5 @@
 from nicewebrl.dataframe import DataFrame
-from nicewebrl.dataframe import concat_dataframes
-
+from nicewebrl.dataframe import concat_list as concat_dataframes
 from nicewebrl.utils import toggle_fullscreen
 from nicewebrl.utils import check_fullscreen
 from nicewebrl.utils import clear_element
@@ -31,7 +30,7 @@ from nicewebrl.nicejax import make_serializable
 from nicewebrl.nicejax import base64_npimage
 from nicewebrl.nicejax import StepType
 from nicewebrl.nicejax import TimeStep
-from nicewebrl.nicejax import EnvParams
+#from nicewebrl.nicejax import EnvParams
 from nicewebrl.nicejax import TimestepWrapper
 from nicewebrl.nicejax import JaxWebEnv
 from nicewebrl.nicejax import MultiAgentJaxWebEnv
