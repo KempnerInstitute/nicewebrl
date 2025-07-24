@@ -642,13 +642,7 @@ class EnvStage(Stage):
     #############################
     # asynchonously save experiment data by putting in a save queue
     # save prior timestep + current event information
-    user_stats = self.user_stats()
-    timestep = self.get_user_data("stage_state").timestep
-    processed_timestep = self.preprocess_timestep(timestep)
-    async with self.get_user_lock():
-      await self.get_user_queue().put((event.args, processed_timestep, user_stats))
-    asyncio.create_task(self._process_save_queue())
-
+    self.save_key_data(event)
     #############################
     # automatically reset on done if flag is set
     #############################
@@ -769,10 +763,16 @@ class EnvStage(Stage):
 
     await self.set_user_data(stage_finished=stage_finished)
 
+  async def save_key_data(self, event):
+    user_stats = self.user_stats()
+    timestep = self.get_user_data("stage_state").timestep
+    processed_timestep = self.preprocess_timestep(timestep)
+    async with self.get_user_lock():
+      await self.get_user_queue().put((event.args, processed_timestep, user_stats))
+    asyncio.create_task(self._process_save_queue())
+    
   async def handle_button_press(self, container):
     pass  # do nothing
-
-
 
 @dataclasses.dataclass
 class MultiAgentEnvStage(EnvStage):
