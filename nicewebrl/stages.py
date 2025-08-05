@@ -643,12 +643,7 @@ class EnvStage(Stage):
     # asynchonously save experiment data by putting in a save queue
     # save prior timestep + current event information
 
-    user_stats = self.user_stats()
-    timestep = self.get_user_data("stage_state").timestep
-    processed_timestep = self.preprocess_timestep(timestep)
-    async with self.get_user_lock():
-      await self.get_user_queue().put((event.args, processed_timestep, user_stats))
-    asyncio.create_task(self._process_save_queue())
+    self.save_key_data(event)
 
     #############################
     # automatically reset on done if flag is set
@@ -770,9 +765,106 @@ class EnvStage(Stage):
 
     await self.set_user_data(stage_finished=stage_finished)
     
+  async def save_key_data(self, event, processed_timestep, user_stats):
+      user_stats = self.user_stats()
+      timestep = self.get_user_data("stage_state").timestep
+      processed_timestep = self.preprocess_timestep(timestep)
+      llm_exchange_history = self.get_user_data("llm_chat_history", [])
+      async with self.get_user_lock():
+        await self.get_user_queue().put((event.args, processed_timestep, user_stats, llm_exchange_history))
+      asyncio.create_task(self._process_save_queue())
+    
   async def handle_button_press(self, container):
     pass  # do nothing
 
+@dataclasses.dataclass
+class LLMEnvStage(EnvStage):
+    """Extended EnvStage that also logs human–LLM interactions as full chat history."""
+
+    user_save_file_fn: callable = user_data_file
+    verbosity: int = 0
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.metadata.update(type="LLMEnvStage")
+        self._user_queues = {}
+
+    def get_user_queue(self):
+        user_seed = app.storage.user["seed"]
+        if user_seed not in self._user_queues:
+            self._user_queues[user_seed] = asyncio.Queue()
+        return self._user_queues[user_seed]
+
+    async def finish_saving_user_data(self):
+        await self.get_user_queue().join()
+
+    async def _process_save_queue(self):
+        queue = self.get_user_queue()
+        while not queue.empty():
+            data = await queue.get()
+            if isinstance(data, tuple):
+                args, timestep, user_stats = data
+                await self.save_experiment_data(args, timestep, user_stats)
+            elif isinstance(data, dict) and data.get("type") == "llm_chat_history":
+                await self._save_chat_history(data["history"])
+            queue.task_done()
+
+    async def _save_chat_history(self, history):
+        user_data = dict(
+            user_id=app.storage.user["seed"],
+            age=app.storage.user.get("age"),
+            sex=app.storage.user.get("sex"),
+          )
+        save_data = dict(
+            stage_idx=app.storage.user.get("stage_idx"),
+            session_id=app.storage.browser["id"],
+            name=self.name,
+            body=self.body,
+            data={"chat_history": history},
+            user_data=user_data,
+            metadata=self.metadata,
+        )
+        save_file = self.user_save_file_fn()
+        async with aiofiles.open(save_file, "ab") as f:
+            await write_msgpack_record(f, save_data)
+        if self.verbosity:
+            logger.info(f"[{self.name}] Saved full chat history ({len(history)} turns).")
+
+    async def handle_llm_prompt_submission(self, prompt_text: str, response_text: str):
+        chat_history = self.get_user_data("llm_chat_history", [])
+        chat_history.append({
+            "prompt": prompt_text,
+            "response": response_text,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        await self.set_user_data(
+            llm_chat_history=chat_history,
+            prompt_queued=True,
+            llm_prompt=prompt_text,
+            llm_output=response_text,
+        )
+        if self.verbosity:
+            logger.info(f"[{self.name}] Appended prompt: '{prompt_text[:30]}...'")
+
+        await self.get_user_queue().put({
+            "type": "llm_chat_history",
+            "history": chat_history,
+        })
+        asyncio.create_task(self._process_save_queue())
+
+    async def save_key_data(self, event, processed_timestep, user_stats):
+      user_stats = self.user_stats()
+      timestep = self.get_user_data("stage_state").timestep
+      processed_timestep = self.preprocess_timestep(timestep)
+      llm_exchange_history = self.get_user_data("llm_chat_history", [])
+      async with self.get_user_lock():
+        await self.get_user_queue().put((event.args, processed_timestep, user_stats, llm_exchange_history))
+      asyncio.create_task(self._process_save_queue())
+      
+
+    async def handle_button_press(self, container):
+        pass  # Do nothing for now
+      
 @dataclasses.dataclass
 class MultiAgentEnvStage(EnvStage):
     """A stage class for handling interactive multi-agent environment episodes.
