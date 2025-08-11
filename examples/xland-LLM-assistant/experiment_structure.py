@@ -6,7 +6,7 @@ from nicegui import ui
 import asyncio
 import nicewebrl
 from nicewebrl import JaxWebEnv, base64_npimage, TimeStep, TimestepWrapper
-from nicewebrl import Stage, EnvStage, FeedbackStage
+from nicewebrl.stages import Stage, EnvStage, FeedbackStage, LLMEnvStage
 from nicewebrl import get_logger
 import xminigrid
 from xminigrid.wrappers import GymAutoResetWrapper
@@ -283,6 +283,25 @@ feedback_stage = FeedbackStage(
   display_fn=feedback_display_fn,
 )
 
+llm_stage = LLMEnvStage(
+    name="LLM Chat",
+    title="Ask the AI",
+    body="Ask follow-up questions about the task.",
+    # --- required EnvStage params ---
+    web_env=jax_web_env,
+    env_params=env_params,
+    render_fn=render_fn,
+    vmap_render_fn=vmap_render_fn,
+    action_keys=action_keys,
+    action_to_name=action_to_name,
+    evaluate_success_fn=evaluate_success_fn,
+    min_success=MIN_SUCCESS_EPISODES,
+    max_episodes=MAX_STAGE_EPISODES,
+    # --- stage UI / behavior ---
+    display_fn=env_stage_display_fn,
+    verbosity=VERBOSITY,
+    msg_display_time=2,
+)
 
 ########################################
 # Define Experiment
@@ -290,7 +309,8 @@ feedback_stage = FeedbackStage(
 all_stages = [
   instruction_stage,
   *env_stages,
-  feedback_stage]
+  feedback_stage,
+  llm_stage]
 experiment = nicewebrl.SimpleExperiment(
   stages=all_stages,
   randomize=[False] + [True] * (len(all_stages) - 1),
