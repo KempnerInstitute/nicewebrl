@@ -774,6 +774,73 @@ class EnvStage(Stage):
     pass  # do nothing
 
 @dataclasses.dataclass
+class LLMEnvStage(EnvStage):
+    """Extended EnvStage that also logs human–LLM interactions as full chat history."""
+
+    user_save_file_fn: callable = user_data_file
+    verbosity: int = 0
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.metadata.update(type="LLMEnvStage")
+        self._user_queues = {}
+
+    async def _process_save_queue(self):
+        """Drain the queue; each item is a 4-tuple, saved with save_experiment_data()."""
+        queue = self.get_user_queue()
+        while not queue.empty():
+            data = await queue.get()
+            try:
+                if isinstance(data, tuple) and len(data) == 4:
+                    args, timestep, user_stats, llm_exchange_history = data
+                    await self.save_experiment_data(args, timestep, user_stats, llm_exchange_history)
+                else:
+                    if self.verbosity:
+                        logger.warning(f"[{self.name}] Unexpected queue item: {data}")
+            finally:
+                queue.task_done()
+
+    async def handle_llm_prompt_submission(self, prompt_text: str, response_text: str):
+        """Append one (prompt, response, timestamp) turn into user_data.llm_chat_history."""
+        history = list(self.get_user_data("llm_chat_history", []))
+        history.append({
+            "prompt": prompt_text,
+            "response": response_text,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        await self.set_user_data(
+            llm_chat_history=history,
+            llm_prompt=prompt_text,
+            llm_output=response_text,
+        )
+        if self.verbosity:
+            logger.info(f"[{self.name}] Appended LLM turn (total={len(history)})")
+
+    async def save_key_data(self, event):
+        """
+        Always pushes a 4-tuple:
+          (event.args, processed_timestep, user_stats, llm_exchange_history)
+        """
+        user_stats = self.user_stats()
+        stage_state = self.get_user_data("stage_state")
+        if stage_state is None:
+            return
+
+        timestep = stage_state.timestep
+        processed_timestep = self.preprocess_timestep(timestep)
+        llm_exchange_history = list(self.get_user_data("llm_chat_history", [])) 
+
+        async with self.get_user_lock():
+            await self.get_user_queue().put(
+                (getattr(event, "args", None), processed_timestep, user_stats, llm_exchange_history)
+            )
+
+        asyncio.create_task(self._process_save_queue())     
+
+    async def handle_button_press(self, container):
+        pass  # Do nothing for now
+      
+@dataclasses.dataclass
 class MultiAgentEnvStage(EnvStage):
     """A stage class for handling interactive multi-agent environment episodes.
     
