@@ -256,7 +256,46 @@ def get_user_lock():
     _user_locks[user_seed] = Lock()
   return _user_locks[user_seed]
 
+async def global_handle_key_press(e, container):
+    logger.info("global_handle_key_press")
+    if experiment.finished():
+        logger.info("Experiment finished")
+        return
 
+    stage = await experiment.get_stage()
+    if stage.get_user_data("finished", False):
+        return
+
+    # HARD GUARD: if the active element is any input/textarea/contentEditable
+    # (including Quasar's internal wrappers), ignore the key.
+    is_typing = await ui.run_javascript("""
+      (function(){
+        const el = document.activeElement;
+        if (!el) return false;
+        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
+        const closest = el.closest('input, textarea, [contenteditable=""], [contenteditable="true"], .q-field__native, .q-field__input');
+        return !!closest;
+      })()
+    """)
+    if is_typing:
+        return
+
+    # Optional: exact match to your prompt box by id
+    active_id = await ui.run_javascript('document.activeElement ? document.activeElement.id : ""')
+    prompt_box_id = stage.get_user_data("prompt_box_id")
+    if prompt_box_id and str(active_id) == str(prompt_box_id):
+        return
+
+    # Logical guard (secondary, but fine to keep)
+    if stage.get_user_data("active_container") != "env":
+        return
+
+    await stage.handle_key_press(e, container)
+
+    local_handle_key_press = stage.get_user_data("local_handle_key_press")
+    if local_handle_key_press is not None:
+        await local_handle_key_press()
+      
 async def global_handle_key_press(e, container):
   logger.info("global_handle_key_press")
   if experiment.finished():
