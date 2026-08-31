@@ -53,7 +53,7 @@ async function updateEnvironment(room_id, action_key) {
     console.log('room_id !== window.room', room_id, window.room)
     return;
   }
-  if (action_key == 'starting') {
+  if (action_key == 'starting' || action_key == '') {
     return;
   }
   if (!window.require_fullscreen || await isFullscreen() ) {

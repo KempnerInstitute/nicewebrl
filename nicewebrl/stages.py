@@ -21,7 +21,6 @@ from nicewebrl.nicejax import (
   base64_npimage,
   make_serializable,
   Timestep,
-  Serializer,
 )
 from nicewebrl.logging import get_logger
 from nicewebrl.utils import retry_with_exponential_backoff
@@ -108,17 +107,23 @@ def dataclass_replace(obj, **changes):
 
 
 async def get_latest_stage_state(
-  example: struct.PyTreeNode, name: str, serializer: Optional[Any] = None
+  example: struct.PyTreeNode,
+  name: str,
+  serializer: Optional[Any] = None,
+  nicegui_session_id_fn: Optional[Callable[[], str]] = None,
 ) -> StageStateModel | None:
   if serializer is None:
     from nicewebrl.nicejax import Serializer
 
     serializer = Serializer()
 
+  if nicegui_session_id_fn is None:
+    nicegui_session_id_fn = lambda: app.storage.browser["id"]
+
   logger.info("Getting latest stage state")
   latest = (
     await StageStateModel.filter(
-      session_id=app.storage.browser["id"],
+      session_id=nicegui_session_id_fn(),
       name=name,
       # stage_idx=app.storage.user["stage_idx"],
     )
@@ -186,14 +191,18 @@ async def save_stage_state(
   max_retries: int = 5,
   base_delay: float = 0.3,
   max_delay: float = 5.0,
+  nicegui_session_id_fn: Optional[Callable[[], str]] = None,
 ):
   if serializer is None:
     from nicewebrl.nicejax import Serializer
 
     serializer = Serializer()
+  
+  if nicegui_session_id_fn is not None:
+    nicegui_session_id_fn = lambda: app.storage.browser["id"]
 
   model = StageStateModel(
-    session_id=app.storage.browser["id"],
+    session_id=nicegui_session_id_fn(),
     # stage_idx=app.storage.user["stage_idx"],
     name=stage_state.name,
     data=serializer.serialize(stage_state),
@@ -229,27 +238,32 @@ class Stage:
       unique_id=self.unique_id,
     )
 
+  def get_key_for_data(self):
+    return app.storage.user["seed"]
+
   def get_user_data(self, key, value=None):
-    user_seed = app.storage.user["seed"]
-    self.user_data[user_seed] = self.user_data.get(user_seed, {})
-    return self.user_data[user_seed].get(key, value)
+    key_for_data = self.get_key_for_data()
+    self.user_data[key_for_data] = self.user_data.get(key_for_data, {})
+    if key is None:
+      return self.user_data[key_for_data]
+    return self.user_data[key_for_data].get(key, value)
 
   def pop_user_data(self, key, value=None):
-    user_seed = app.storage.user["seed"]
-    self.user_data[user_seed] = self.user_data.get(user_seed, {})
-    return self.user_data[user_seed].pop(key, value)
+    key_for_data = self.get_key_for_data()
+    self.user_data[key_for_data] = self.user_data.get(key_for_data, {})
+    return self.user_data[key_for_data].pop(key, value)
 
   async def set_user_data(self, **kwargs):
-    user_seed = app.storage.user["seed"]
+    key_for_data = self.get_key_for_data()
     async with self._lock:
-      self.user_data[user_seed] = self.user_data.get(user_seed, {})
-      self.user_data[user_seed].update(kwargs)
+      self.user_data[key_for_data] = self.user_data.get(key_for_data, {})
+      self.user_data[key_for_data].update(kwargs)
 
   def get_user_lock(self):
-    user_seed = app.storage.user["seed"]
-    if user_seed not in self._user_locks:
-      self._user_locks[user_seed] = Lock()
-    return self._user_locks[user_seed]
+    key_for_data = self.get_key_for_data()
+    if key_for_data not in self._user_locks:
+      self._user_locks[key_for_data] = Lock()
+    return self._user_locks[key_for_data]
 
   async def activate(self, container: ui.element):
     await self.display_fn(stage=self, container=container)
@@ -301,7 +315,7 @@ class FeedbackStage(Stage):
       stage_idx=app.storage.user["stage_idx"],
       name=self.name,
       body=self.body,
-      session_id=app.storage.browser["id"],
+      session_id=self.nicegui_session_id_fn(),
       data=results,
       user_data=user_data,
       metadata=metadata,
@@ -361,9 +375,12 @@ class EnvStage(Stage):
   verbosity: int = 0
   preprocess_timestep: Optional[Callable[[Timestep], Timestep]] = None
   framework: str = "jax"
+  precompute_next_steps: bool = True
 
   def __post_init__(self):
     super().__post_init__()
+
+    self.nicegui_session_id_fn = lambda: app.storage.browser["id"]
 
     self.key_to_action = {k: a for a, k in enumerate(self.action_keys)}
     if self.action_to_name is None:
@@ -381,7 +398,8 @@ class EnvStage(Stage):
 
     # determine if we can precompute next steps
     self.precompute_next_steps = (
-      self.vmap_render_fn is not None
+      self.precompute_next_steps
+      and self.vmap_render_fn is not None
       and hasattr(self.web_env, "next_steps")
       and callable(getattr(self.web_env, "next_steps"))
     )
@@ -415,10 +433,10 @@ class EnvStage(Stage):
 
   def get_user_queue(self):
     """Get queue for current user, creating if needed"""
-    user_seed = app.storage.user["seed"]
-    if user_seed not in self._user_queues:
-      self._user_queues[user_seed] = asyncio.Queue()
-    return self._user_queues[user_seed]
+    key_for_data = self.get_key_for_data()
+    if key_for_data not in self._user_queues:
+      self._user_queues[key_for_data] = asyncio.Queue()
+    return self._user_queues[key_for_data]
 
   async def finish_saving_user_data(self):
     await self.get_user_queue().join()
@@ -456,17 +474,24 @@ class EnvStage(Stage):
             f"'{self.name}': Error getting imageSeenTime (attempt {attempt}): {e}"
           )
         await asyncio.sleep(0.1)  # Short delay between attempts
-        if attempt >= 10:
+        if attempt >= 100:
           with container:
             ui.notify("Please refresh the page", type="negative")
           return
 
-  async def step_and_send_timestep(self, container, update_display: bool = True):
+  async def step_and_send_timestep(
+      self,
+      container,
+      update_display: bool = True,
+      timestep: Optional[Timestep] = None):
     #############################
     # get next images and store them client-side
     # setup code to display next state
     #############################
-    timestep = self.get_user_data("stage_state").timestep
+    rng = new_rng()
+    if timestep is None:
+      timestep = self.get_user_data("stage_state").timestep
+
     if self.precompute_next_steps:
       rng = new_rng()
       next_timesteps = self.web_env.next_steps(rng, timestep, self.env_params)
@@ -479,13 +504,13 @@ class EnvStage(Stage):
 
       js_code = f"window.next_states = {next_images};"
 
-      ui.run_javascript(js_code)
+      await ui.run_javascript(js_code)
       await self.set_user_data(next_timesteps=next_timesteps)
     else:
       # Create a dummy next_states object that allows all action keys
       dummy_next_states = {key: "" for key in self.action_keys}
       js_code = f"window.next_states = {dummy_next_states};"
-      ui.run_javascript(js_code)
+      await ui.run_javascript(js_code)
 
     #############################
     # display image
@@ -493,13 +518,13 @@ class EnvStage(Stage):
     if update_display:
       await self.display_timestep(container, timestep)
     else:
-      ui.run_javascript("window.imageSeenTime = window.next_imageSeenTime;", timeout=10)
+      await ui.run_javascript("window.imageSeenTime = window.next_imageSeenTime;", timeout=10)
 
   async def wait_for_start(
     self,
     container: ui.element,
   ):
-    ui.run_javascript("window.accept_keys = false;")
+    await ui.run_javascript("window.accept_keys = false;")
     if self.reset_display_fn is not None:
       await self.reset_display_fn(
         stage=self,
@@ -507,7 +532,7 @@ class EnvStage(Stage):
         timestep=self.get_user_data("stage_state").timestep,
       )
 
-    ui.run_javascript("window.accept_keys = true;")
+    await ui.run_javascript("window.accept_keys = true;")
 
   async def activate(self, container: ui.element):
     """
@@ -516,7 +541,7 @@ class EnvStage(Stage):
     Then try to load stage state from memory using the stage state to get the right types.
     If no stage state is found, continue with the new stage state.
     """
-    ui.run_javascript(
+    await ui.run_javascript(
       f"window.update_from_next_state = {str(self.precompute_next_steps).lower()};"
     )
 
@@ -535,6 +560,7 @@ class EnvStage(Stage):
       example=new_stage_state,
       name=self.name,
       serializer=self.serializer,
+      nicegui_session_id_fn=self.nicegui_session_id_fn,
     )
 
     if loaded_stage_state is None:
@@ -553,7 +579,7 @@ class EnvStage(Stage):
       await self.step_and_send_timestep(container)
 
     await self.set_user_data(started=True)
-    ui.run_javascript("window.accept_keys = true;")
+    await ui.run_javascript("window.accept_keys = true;")
 
   def user_stats(self):
     stage_state = self.get_user_data("stage_state")
@@ -590,7 +616,7 @@ class EnvStage(Stage):
 
     save_data = dict(
       stage_idx=app.storage.user.get("stage_idx"),
-      session_id=app.storage.browser["id"],
+      session_id=self.nicegui_session_id_fn(),
       data=dict(
         image_seen_time=imageSeenTime,
         action_taken_time=keydownTime,
@@ -709,7 +735,9 @@ class EnvStage(Stage):
     # e.g. key presses
     #############################
     # asynchonously save experiment data by putting in a save queue
-    asyncio.create_task(self.save_key_data(event))
+
+    save_data = await self.prepare_save_data(event)
+    asyncio.create_task(self.save_key_data(save_data))
 
     #############################
     # automatically reset on done if flag is set
@@ -847,12 +875,15 @@ class EnvStage(Stage):
 
     await self.set_user_data(stage_finished=stage_finished)
 
-  async def save_key_data(self, event):
+  async def prepare_save_data(self, event):
     user_stats = self.user_stats()
     timestep = self.get_user_data("stage_state").timestep
     processed_timestep = self.preprocess_timestep(timestep)
+    return (event.args, processed_timestep, user_stats)
+
+  async def save_key_data(self, save_data):
     async with self.get_user_lock():
-      await self.get_user_queue().put((event.args, processed_timestep, user_stats))
+      await self.get_user_queue().put(save_data)
     asyncio.create_task(self._process_save_queue())
 
   async def handle_button_press(self, container):
@@ -892,18 +923,9 @@ class LLMEnvStage(EnvStage):
     if self.verbosity:
       logger.info(f"[{self.name}] LLM history updated (len={len(history)})")
 
-  async def save_key_data(self, event):
-    """
-    Pushes a 4-tuple:
-      (event.args, processed_timestep, user_stats, llm_chat_history)
-    into the per-user queue, then schedules the async writer.
-    """
-    stage_state = self.get_user_data("stage_state")
-    if stage_state is None:
-      return
-
+  async def prepare_save_data(self, event):
     user_stats = self.user_stats()
-    timestep = stage_state.timestep
+    timestep = self.get_user_data("stage_state").timestep
     processed_timestep = self.preprocess_timestep(timestep)
     # Always produce a list — [] if nothing yet
     llm_chat_history = list(self.get_user_data("llm_chat_history", []))
@@ -913,11 +935,7 @@ class LLMEnvStage(EnvStage):
     # inject the chat history into args so the base class can persist it
     args["llm_chat_history"] = llm_chat_history
 
-    # enqueue and let EnvStage._process_save_queue() handle the write
-    async with self.get_user_lock():
-      await self.get_user_queue().put((args, processed_timestep, user_stats))
-
-    asyncio.create_task(self._process_save_queue())
+    return (args, processed_timestep, user_stats)
 
   async def handle_button_press(self, container):
     pass  # Do nothing for now
@@ -956,13 +974,18 @@ class MultiAgentEnvStage(EnvStage):
     if self.check_finished is None:
       self.check_finished = lambda timestep: timestep.last()
 
-  async def step_and_send_timestep(self, container, update_display: bool = True):
+  async def step_and_send_timestep(
+      self,
+      container,
+      update_display: bool = True,
+      timestep: Optional[Timestep] = None):
     #############################
     # get next images and store them client-side
     # setup code to display next state
     #############################
     rng = new_rng()
-    timestep = self.get_user_data("stage_state").timestep
+    if timestep is None:
+      timestep = self.get_user_data("stage_state").timestep
 
     # Get the other agent's action using the model if available
     if self.model is not None:
@@ -1015,7 +1038,7 @@ class MultiAgentEnvStage(EnvStage):
     }
 
     js_code = f"window.next_states = {next_images};"
-    ui.run_javascript(js_code)
+    await ui.run_javascript(js_code)
 
     await self.set_user_data(next_timesteps=next_timesteps)
 
@@ -1023,7 +1046,7 @@ class MultiAgentEnvStage(EnvStage):
     if update_display:
       await self.display_timestep(container, timestep)
     else:
-      ui.run_javascript("window.imageSeenTime = window.next_imageSeenTime;", timeout=10)
+      await ui.run_javascript("window.imageSeenTime = window.next_imageSeenTime;", timeout=10)
 
   async def activate(self, container: ui.element):
     """Initialize the stage and set up the human agent ID if not specified."""

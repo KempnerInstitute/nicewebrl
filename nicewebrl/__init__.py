@@ -10,7 +10,7 @@ from nicewebrl.utils import basic_javascript_file
 from nicewebrl.utils import multihuman_javascript_file
 from nicewebrl.utils import initialize_user
 from nicewebrl.utils import get_user_session_minutes
-from nicewebrl.utils import broadcast_message
+from nicewebrl.utils import broadcast_event_call
 from nicewebrl.utils import read_msgpack_records
 from nicewebrl.utils import write_msgpack_record
 from nicewebrl.utils import read_all_records
@@ -22,7 +22,7 @@ from nicewebrl.utils import user_metadata_file
 from nicewebrl.utils import save_metadata
 from nicewebrl.utils import get_progress
 from nicewebrl.utils import load_data
-
+from nicewebrl.utils import active_clients
 from nicewebrl.nicejax import get_rng
 from nicewebrl.nicejax import new_rng
 from nicewebrl.nicejax import match_types
@@ -63,3 +63,12 @@ from nicewebrl.data_analysis import compute_reaction_time
 from nicewebrl.data_analysis import time_diff
 
 from nicewebrl.run_experiment import run
+
+
+from nicewebrl.multihuman_stages import MultiHumanLeaderFollowerEnvStage
+from nicewebrl.multihuman_stages import MultiHumanSequentialEnvStage
+from nicewebrl.multihuman_utils import get_room_stage_object
+from nicewebrl.multihuman_utils import set_room_stage_object
+from nicewebrl.multihuman_utils import get_room_users
+from nicewebrl.multihuman_utils import add_user_to_room
+from nicewebrl.multihuman_utils import setup_room

@@ -7,6 +7,8 @@ import numpy as np
 
 import torch
 from tensordict import TensorDict
+import logging
+
 
 from nicewebrl.logging import get_logger
 from nicewebrl import Timestep, StepType
@@ -78,10 +80,11 @@ class TorchRLWebEnv:
     env_reset, env_step = env.reset, env._step
 
     if compile:
+      logging.getLogger("torch._dynamo").setLevel(logging.ERROR)
       print("Compiling environment reset and step functions.")
       start = time.time()
-      env_reset = torch.compile(env_reset)
-      env_step = torch.compile(env_step)
+      env_reset = torch.compile(env_reset, fullgraph=False)
+      env_step = torch.compile(env_step, fullgraph=False)
       print(f"\ttime: {time.time() - start}")
     self.env_reset = env_reset
     self.env_step = env_step

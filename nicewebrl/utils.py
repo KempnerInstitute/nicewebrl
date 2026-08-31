@@ -195,6 +195,8 @@ def initialize_user(*, seed: int = 0, request: Request = None):
   else:
     app.storage.user["seed"] = app.storage.user.get("seed", random.getrandbits(32))
 
+  app.storage.user["stage_idx"] = app.storage.user.get("stage_idx", 0)
+
   app.storage.user["rng_splits"] = app.storage.user.get("rng_splits", 0)
   if "rng_key" not in app.storage.user:
     rng_key = jax.random.PRNGKey(app.storage.user["seed"])
@@ -256,15 +258,35 @@ def get_user_session_minutes():
   return minutes_passed
 
 
-def broadcast_message(event: str, message: str):
+clients = set()
+# This function is called when a client connects
+@app.on_connect
+def handle_connect(client: Client):
+  print(f"Client {client.id} connected.")
+  clients.add(client.id)
+
+# This function is called when a client disconnects
+@app.on_disconnect
+def handle_disconnect(client: Client):
+  print(f"Client {client.id} disconnected.")
+  clients.discard(client.id)
+
+
+def active_clients():
+  global clients
+  return clients
+
+
+async def broadcast_event_call(event: str, message: str):
   called_by_user_id = str(app.storage.user["seed"])
   called_by_room_id = str(app.storage.user["room_id"])
   stage = app.storage.user["stage_idx"]
   fn = f"userMessage('{called_by_room_id}', '{called_by_user_id}', '{event}', '{stage}', '{message}')"
-  logger.info(fn)
   for client in Client.instances.values():
-    with client:
-      ui.run_javascript(fn)
+    if client.id in active_clients():
+      logger.info(fn)
+      with client:
+        await ui.run_javascript(fn)
 
 
 async def write_msgpack_record(f, data):
@@ -368,3 +390,4 @@ def read_all_records_sync(filepath: str) -> List[Dict]:
 
 
 load_data = read_all_records_sync
+
